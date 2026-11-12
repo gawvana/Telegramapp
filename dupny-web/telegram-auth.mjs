@@ -97,7 +97,7 @@ export function registerTelegramRoutes() {
     if (!/^\d+$/.test(ownerId || '')) throw new HttpError(503, 'Владелец Mini App не настроен');
     const isOwner = id === ownerId;
     const mapping = sql('SELECT user_id FROM telegram_accounts WHERE telegram_id = ?').get(id);
-    const referrer = invitedBy(startParam || body.referral, id);
+    const referrer = invitedBy(body.referral || startParam, id);
     let uid = mapping?.user_id;
     // Existing users can accept a friend invitation exactly once.
     // Never replace a previously established inviter.
