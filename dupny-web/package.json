@@ -3,9 +3,11 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "engines": {"node": ">=22.5"},
+  "engines": {
+    "node": ">=22.5"
+  },
   "scripts": {
     "postinstall": "node bootstrap.mjs",
-    "start": "node --experimental-sqlite --disable-warning=ExperimentalWarning site/server/index.js"
+    "start": "node --experimental-sqlite --disable-warning=ExperimentalWarning start.mjs"
   }
 }
