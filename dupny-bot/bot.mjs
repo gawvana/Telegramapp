@@ -5,7 +5,7 @@ if (!TOKEN) { console.error("TELEGRAM_BOT_TOKEN is missing"); process.exit(1); }
 const EMOJI = { bot: "6030400221232501136", home: "6042137469204303531", settings: "6032742198179532882" };
 const emoji = (id, fallback) => '<tg-emoji emoji-id="' + id + '">' + fallback + '</tg-emoji>';
 const startHtml = emoji(EMOJI.bot, "🤖") + " <b>Добро пожаловать в Dupny!</b>\n\n" +
-  emoji(EMOJI.home, "🏠") + " Смотри фильмы и слушай музыку с друзьями.\n\n/start — главная\n/help — помощь\n/settings — настройки";
+  emoji(EMOJI.home, "🏠") + " Смотри фильмы и слушай музыку с друзьями прямо в Telegram.\n\n/start — главная\n/help — помощь\n/settings — настройки";
 const startPlain = "🎬 Добро пожаловать в Dupny!\n\nСмотри фильмы и слушай музыку с друзьями.\n\n/start — главная\n/help — помощь\n/settings — настройки";
 let stopping = false, offset = 0;
 process.on("SIGINT", () => { stopping = true; });
@@ -30,60 +30,89 @@ async function api(method, payload = {}, timeoutMs = 45000) {
     return data.result;
   } finally { clearTimeout(timer); }
 }
-function keyboard(premium) {
-  const open = { text: premium ? "Открыть Dupny" : "🏠 Открыть Dupny", url: SITE };
-  const help = { text: premium ? "Помощь" : "❔ Помощь", callback_data: "help" };
+function keyboard(premium, referral = '') {
+  // Telegram opens this inside its own WebView, not as a browser URL.
+  const url = SITE + (referral ? '?ref=' + encodeURIComponent(referral) : '');
+  const open = { text: premium ? 'Открыть Mini App' : '🎬 Открыть Mini App', web_app: { url } };
+  const invite = { text: '👥 Пригласить друзей', callback_data: 'invite' };
+  const help = { text: premium ? 'Помощь' : '❔ Помощь', callback_data: 'help' };
   if (premium) {
     open.icon_custom_emoji_id = EMOJI.home;
     help.icon_custom_emoji_id = EMOJI.bot;
   }
-  return { inline_keyboard: [[open], [help]] };
+  return { inline_keyboard: [[open], [invite], [help]] };
 }
-async function send(chatId, html, plain, premium = true) {
+async function send(chatId, html, plain, premium = true, referral = '') {
   try {
-    return await api("sendMessage", {
+    return await api('sendMessage', {
       chat_id: chatId,
       text: premium ? html : plain,
-      parse_mode: premium ? "HTML" : undefined,
-      reply_markup: keyboard(premium),
+      parse_mode: premium ? 'HTML' : undefined,
+      reply_markup: keyboard(premium, referral),
       disable_web_page_preview: true
     });
   } catch (error) {
     if (premium && error.status === 400) {
-      console.warn("Custom emoji not available; using ordinary emoji.");
-      return send(chatId, html, plain, false);
+      console.warn('Custom emoji unavailable; using ordinary emoji.');
+      return send(chatId, html, plain, false, referral);
     }
     throw error;
   }
 }
+function inviteLink(telegramId) {
+  return 'https://t.me/DupnyApp?start=ref_' + telegramId;
+}
+async function sendInvite(chatId, telegramId) {
+  const url = inviteLink(telegramId);
+  const share = 'https://t.me/share/url?url=' + encodeURIComponent(url) +
+    '&text=' + encodeURIComponent('Заходи в Dupny! Будем смотреть фильмы и слушать музыку вместе 🎬');
+  return api('sendMessage', {
+    chat_id: chatId,
+    text: '👥 <b>Пригласи друзей в Dupny</b>\n\nОтправь ссылку другу. Когда он откроет Mini App, его аккаунт зарегистрируется через Telegram.\n\n' + url,
+    parse_mode: 'HTML',
+    reply_markup: { inline_keyboard: [
+      [{ text: '📨 Поделиться приглашением', url: share }],
+      [{ text: '🎬 Открыть Mini App', web_app: { url: SITE } }]
+    ] },
+    disable_web_page_preview: true
+  });
+}
 async function handleMessage(message) {
   if (!message.text || !message.chat?.id) return;
-  const cmd = message.text.trim().split(/\s+/)[0].toLowerCase().split("@")[0];
+  if (message.chat.type !== 'private') return; // web_app buttons are for private chats
+  const words = message.text.trim().split(/\s+/);
+  const cmd = words[0].toLowerCase().split('@')[0];
   const chatId = message.chat.id;
-  if (cmd === "/start") return send(chatId, startHtml, startPlain);
-  if (cmd === "/help") {
-    const h = emoji(EMOJI.bot, "🤖") + " <b>Помощь Dupny</b>\n\n/start — главная\n/help — помощь\n/settings — настройки\n/about — о проекте";
-    const p = "🤖 Помощь Dupny\n\n/start — главная\n/help — помощь\n/settings — настройки\n/about — о проекте";
+  const referral = /^ref_\d{4,18}$/.test(words[1] || '') ? words[1] : '';
+  if (cmd === '/start') return send(chatId, startHtml, startPlain, true, referral);
+  if (cmd === '/invite') return sendInvite(chatId, message.from.id);
+  if (cmd === '/help') {
+    const h = emoji(EMOJI.bot, '🤖') + ' <b>Помощь Dupny</b>\n\n/start — главная\n/invite — пригласить друзей\n/help — помощь\n/settings — настройки\n/about — о проекте';
+    const p = '🤖 Помощь Dupny\n\n/start — главная\n/invite — пригласить друзей\n/help — помощь\n/settings — настройки\n/about — о проекте';
     return send(chatId, h, p);
   }
-  if (cmd === "/settings") {
-    const h = emoji(EMOJI.settings, "⚙️") + " <b>Настройки Dupny</b>\n\nПрофиль, видео и комнаты на сайте. Открой его кнопкой ниже.";
-    const p = "⚙️ Настройки Dupny\n\nПрофиль, видео и комнаты на сайте. Открой его кнопкой ниже.";
+  if (cmd === '/settings') {
+    const h = emoji(EMOJI.settings, '⚙️') + ' <b>Настройки Dupny</b>\n\nПрофиль и комнаты находятся в Mini App. Открой его кнопкой ниже.';
+    const p = '⚙️ Настройки Dupny\n\nПрофиль и комнаты находятся в Mini App. Открой его кнопкой ниже.';
     return send(chatId, h, p);
   }
-  if (cmd === "/about") {
-    const h = emoji(EMOJI.bot, "🤖") + " <b>Dupny (Дупни)</b>\n\nБот для совместного просмотра фильмов и музыки.";
-    const p = "🤖 Dupny (Дупни)\n\nБот для совместного просмотра фильмов и музыки.";
+  if (cmd === '/about') {
+    const h = emoji(EMOJI.bot, '🤖') + ' <b>Dupny (Дупни)</b>\n\nTelegram Mini App для совместного просмотра фильмов и музыки. Регистрация через Telegram.';
+    const p = '🤖 Dupny (Дупни)\n\nTelegram Mini App для совместного просмотра фильмов и музыки. Регистрация через Telegram.';
     return send(chatId, h, p);
   }
-  if (message.chat.type === "private") return send(chatId, startHtml, startPlain);
+  return send(chatId, startHtml, startPlain);
 }
 async function handleCallback(query) {
-  await api("answerCallbackQuery", { callback_query_id: query.id }).catch(() => {});
-  if (query.data === "help" && query.message?.chat?.id) {
+  await api('answerCallbackQuery', { callback_query_id: query.id }).catch(() => {});
+  if (!query.message?.chat?.id || query.message.chat.type !== 'private') return;
+  if (query.data === 'invite') {
+    return sendInvite(query.message.chat.id, query.from.id);
+  }
+  if (query.data === 'help') {
     return send(query.message.chat.id,
-      emoji(EMOJI.bot, "🤖") + " <b>Команды Dupny</b>\n\n/start, /help, /settings, /about",
-      "🤖 Команды Dupny\n\n/start, /help, /settings, /about");
+      emoji(EMOJI.bot, '🤖') + ' <b>Команды Dupny</b>\n\n/start, /invite, /help, /settings, /about',
+      '🤖 Команды Dupny\n\n/start, /invite, /help, /settings, /about');
   }
 }
 async function init() {
@@ -91,12 +120,14 @@ async function init() {
   console.log("Dupny bot connected: @" + me.username + " (ID " + me.id + ")");
   await api("deleteWebhook", { drop_pending_updates: false });
   const profile = [
+    ['setChatMenuButton', { menu_button: { type: 'web_app', text: 'Открыть Dupny', web_app: { url: SITE } } }],
     ["setMyName", { name: "Dupny | Дупни" }],
-    ["setMyDescription", { description: "Dupny — фильмы, музыка и совместный просмотр с друзьями. Открывай сайт через бота." }],
+    ["setMyDescription", { description: "Dupny — фильмы, музыка и совместный просмотр с друзьями. Открывай Mini App прямо в Telegram." }],
     ["setMyShortDescription", { short_description: "Фильмы, музыка и комнаты с друзьями 🎬" }],
     ["setMyCommands", { commands: [
       { command: "start", description: "Главная" },
       { command: "help", description: "Помощь" },
+      { command: "invite", description: "Пригласить друзей" },
       { command: "settings", description: "Настройки" },
       { command: "about", description: "О проекте" }
     ] }]
