@@ -80,14 +80,14 @@ try {
       "  if (!token) return \`${cookieName(req)}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure}\`;",
       "  return \`${cookieName(req)}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${Math.floor(SESSION_TTL / 1000)}${secure}\`;",
       "}",
-    ].join('\\n'),
+    ].join('\n'),
     [
       "export function sessionCookie(req, token) {",
       "  const attrs = isSecure(req) ? '; Secure; SameSite=None; Partitioned' : '; SameSite=Lax';",
       "  if (!token) return \`${cookieName(req)}=; Path=/; HttpOnly${attrs}; Max-Age=0\`;",
       "  return \`${cookieName(req)}=${token}; Path=/; HttpOnly${attrs}; Max-Age=${Math.floor(SESSION_TTL / 1000)}\`;",
       "}",
-    ].join('\\n'));
+    ].join('\n'));
   patch(path.join(src, 'server', 'routes.js'),
     "import fs from 'node:fs';",
     "import { streamR2 } from './r2-storage.js';\nimport { registerTelegramRoutes } from './telegram-auth.js';\nimport fs from 'node:fs';");
@@ -125,16 +125,16 @@ try {
   // If a cookie is unavailable, never show the legacy login page.
   patch(path.join(src, 'public', 'js', 'app.js'),
     "  if (!store.me && !route.pub) {",
-    "  if (window.Telegram?.WebApp && !store.me) {\\n" +
-    "    window.__dupnyShowLoginProblem?.();\\n" +
-    "    return;\\n" +
-    "  }\\n" +
+    "  if (window.Telegram?.WebApp && !store.me) {\n" +
+    "    window.__dupnyShowLoginProblem?.();\n" +
+    "    return;\n" +
+    "  }\n" +
     "  if (!store.me && !route.pub) {");
   // Also block the fallback redirect when the user is already inside Telegram.
   patch(path.join(src, 'public', 'js', 'app.js'),
-    "  if (store.me) await startSession();\\n  app.classList.remove('booting');",
-    "  if (store.me) await startSession();\\n" +
-    "  else if (window.Telegram?.WebApp) { window.__dupnyShowLoginProblem?.(); return; }\\n" +
+    "  if (store.me) await startSession();\n  app.classList.remove('booting');",
+    "  if (store.me) await startSession();\n" +
+    "  else if (window.Telegram?.WebApp) { window.__dupnyShowLoginProblem?.(); return; }\n" +
     "  app.classList.remove('booting');");
   // Telegram account login does not use a user-entered password.
   patch(path.join(src, 'public', 'js', 'app.js'),
