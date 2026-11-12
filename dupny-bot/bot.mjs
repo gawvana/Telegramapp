@@ -1,4 +1,5 @@
 // Dupny Telegram Bot • Bot API 9.4+ custom emoji with safe fallback.
+import crypto from 'node:crypto';
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const SITE = process.env.DUPNY_SITE_URL || 'https://dupny-production.up.railway.app';
 if (!TOKEN) { console.error('TELEGRAM_BOT_TOKEN is missing'); process.exit(1); }
@@ -59,6 +60,23 @@ function keyboard(premium, referral = '') {
 function inviteLink(telegramId) {
   return 'https://t.me/DupnyApp?start=ref_' + telegramId;
 }
+// Record /start referrals while Telegram still supplies the invite context.
+// This also works when the friend later launches the app from the bot menu.
+async function rememberReferral(inviteeId, referral) {
+  const inviterId = referral.slice(4);
+  if (String(inviteeId) === inviterId) return;
+  const timestamp = Math.floor(Date.now() / 1000);
+  const payload = {
+    inviteeId: String(inviteeId), inviterId, timestamp,
+    signature: crypto.createHmac('sha256', TOKEN)
+      .update(String(inviteeId) + ':' + inviterId + ':' + timestamp).digest('hex')
+  };
+  const response = await fetch(SITE + '/api/telegram/referral', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(payload), signal: AbortSignal.timeout(6000)
+  });
+  if (!response.ok) throw new Error('Referral registration HTTP ' + response.status);
+}
 function inviteKeyboard(premium, link) {
   const share = 'https://t.me/share/url?url=' + encodeURIComponent(link)
     + '&text=' + encodeURIComponent('Присоединяйся к Dupny! Будем смотреть фильмы и слушать музыку вместе.');
@@ -114,6 +132,8 @@ async function handleMessage(msg) {
   const command = words[0].toLowerCase().split('@')[0];
   const referral = /^ref_\d{4,18}$/.test(words[1] || '') ? words[1] : '';
   if (command === '/start' && referral) {
+    await rememberReferral(msg.from.id, referral)
+      .catch(error => console.warn('Referral registration failed:', error.message));
     // Telegram users may open the Mini App from the persistent chat menu
     // instead of the referral-specific inline button. Preserve it in both.
     try {
