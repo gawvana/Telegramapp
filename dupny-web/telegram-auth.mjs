@@ -8,6 +8,8 @@ import { HttpError } from './util.js';
 db.exec('CREATE TABLE IF NOT EXISTS telegram_accounts (' +
   'telegram_id TEXT PRIMARY KEY, user_id INTEGER NOT NULL UNIQUE ' +
   'REFERENCES users(id) ON DELETE CASCADE, referred_by TEXT, created_at INTEGER NOT NULL)');
+db.exec('CREATE TABLE IF NOT EXISTS telegram_sessions (' +
+  'session_id TEXT PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE)');
 const columns = new Set(db.prepare('PRAGMA table_info(telegram_accounts)').all().map(c => c.name));
 if (!columns.has('username')) db.exec('ALTER TABLE telegram_accounts ADD COLUMN username TEXT');
 if (!columns.has('photo_url')) db.exec('ALTER TABLE telegram_accounts ADD COLUMN photo_url TEXT');
@@ -24,7 +26,7 @@ function validatedUser(initData) {
     throw new HttpError(401, 'Некорректные данные Telegram');
   }
   const check = [...params.entries()].filter(([key]) => key !== 'hash')
-    .sort(([a], [b]) => a.localeCompare(b, 'en'))
+    .sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)
     .map(([key, value]) => key + '=' + value).join('\n');
   const secret = crypto.createHmac('sha256', 'WebAppData').update(token).digest();
   const expected = crypto.createHmac('sha256', secret).update(check).digest();
@@ -119,6 +121,8 @@ export function registerTelegramRoutes() {
     });
     const u = sql('SELECT * FROM users WHERE id = ?').get(uid);
     const session = auth.createSession(uid, req.headers['user-agent']);
+    const sid = crypto.createHash('sha256').update(session).digest('hex');
+    sql('INSERT INTO telegram_sessions (session_id) VALUES (?)').run(sid);
     sendJson(res, 200, {
       ok: true,
       user: auth.publicUser(u),
