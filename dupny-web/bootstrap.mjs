@@ -77,7 +77,7 @@ try {
     "import { bootTelegram } from './telegram-mini.js';\nimport { h, $, sleep, reduced } from './util.js';");
   patch(path.join(src, 'public', 'js', 'app.js'),
     '(async function boot() {\n  try { await loadMe(); }',
-    '(async function boot() {\n  if (!await bootTelegram()) { app.classList.remove('booting'); return; }\n  try { await loadMe(); }');
+    "(async function boot() {\n  if (!await bootTelegram()) { app.classList.remove('booting'); return; }\n  try { await loadMe(); }");
   // No password, logout or profile-edit forms inside Telegram.
   patch(path.join(src, 'public', 'js', 'pages', 'settings.js'),
     '  return () => { for (const off of offs) off(); offs = []; };',
