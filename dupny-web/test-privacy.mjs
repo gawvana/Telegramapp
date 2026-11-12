@@ -33,10 +33,10 @@ function signedData(tgId) {
   p.set('hash',crypto.createHmac('sha256',secret).update(check).digest('hex'));
   return p.toString();
 }
-async function account(tgId) {
+async function account(tgId, referral = '') {
   const res = await fetch(base+'/api/telegram/auth',{
     method:'POST',headers:{'content-type':'application/json','x-forwarded-proto':'https'},
-    body:JSON.stringify({initData:signedData(tgId)})
+    body:JSON.stringify({initData:signedData(tgId), referral})
   });
   const obj=await res.json();
   assert.equal(res.status,200,JSON.stringify(obj));
@@ -53,10 +53,21 @@ try{
   const a=await account(8294117388);
   const b=await account(1234567890);
   assert.notEqual(a.uid,b.uid);
-  const invited=await account(1234567891);
+  // Existing user accepts a link; a new user accepts a link on first login.
+  await account(1234567890,'ref_8294117388');
+  const invited=await account(1234567891,'ref_1234567890');
   const stranger=await account(1234567892);
-  sql('UPDATE telegram_accounts SET referred_by = ? WHERE user_id = ?').run('8294117388',b.uid);
-  sql('UPDATE telegram_accounts SET referred_by = ? WHERE user_id = ?').run('1234567890',invited.uid);
+  assert.equal(sql('SELECT referred_by FROM telegram_accounts WHERE user_id = ?').get(b.uid).referred_by,
+    '8294117388', 'existing accounts must accept a referral link');
+  assert.equal(sql('SELECT referred_by FROM telegram_accounts WHERE user_id = ?').get(invited.uid).referred_by,
+    '1234567890', 'new accounts must accept referral links');
+  // A second link cannot silently replace an established friend connection.
+  await account(1234567891,'ref_8294117388');
+  assert.equal(sql('SELECT referred_by FROM telegram_accounts WHERE user_id = ?').get(invited.uid).referred_by,
+    '1234567890', 'established referrals cannot be replaced');
+  const noRef = await account(1234567892, 'ref_1234567892');
+  assert.equal(sql('SELECT referred_by FROM telegram_accounts WHERE user_id = ?').get(noRef.uid).referred_by,
+    null, 'users cannot invite themselves');
   const friendsRes=await request(b,'/api/friends');
   assert.equal(friendsRes.status,200,'regular user can open Friends');
   const myFriends=(await friendsRes.json()).friends;
@@ -108,7 +119,7 @@ try{
   const myRoomId=(await myRoom.json()).id;
   assert.equal(roomFor(videoB,b.uid),myRoomId);
   assert.equal((await (await request(a,'/api/rooms')).json()).list.length,0);
-  console.log('[Dupny privacy test] Media, rooms, Friends visibility and referral privacy: PASS');
+  console.log('[Dupny privacy test] Media, rooms, Friends visibility, old/new referral linking: PASS');
 }finally{
   await new Promise(resolve=>server.close(resolve));
   db.close();
