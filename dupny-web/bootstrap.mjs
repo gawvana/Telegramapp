@@ -34,8 +34,18 @@ try {
   brand(path.join(src, 'public'));
   brand(path.join(src, 'server'));
   fs.copyFileSync('telegram-auth.mjs', path.join(src, 'server', 'telegram-auth.js'));
+  fs.copyFileSync('r2-storage.mjs', path.join(src, 'server', 'r2-storage.js'));
   fs.copyFileSync('telegram-mini.js', path.join(src, 'public', 'js', 'telegram-mini.js'));
   fs.copyFileSync('friends-telegram.js', path.join(src, 'public', 'js', 'pages', 'friends.js'));
+  // R2 uses official S3-compatible AWS SDK packages only on the server.
+  {
+    const packageFile = path.join(src, 'package.json');
+    const pkg = JSON.parse(fs.readFileSync(packageFile, 'utf8'));
+    pkg.dependencies ||= {};
+    pkg.dependencies['@aws-sdk/client-s3'] = '^3.800.0';
+    pkg.dependencies['@aws-sdk/lib-storage'] = '^3.800.0';
+    fs.writeFileSync(packageFile, JSON.stringify(pkg, null, 2) + '\n');
+  }
   // Expose Telegram profile in every /api/me and room user result.
   {
     const file = path.join(src, 'server', 'auth.js');
@@ -62,7 +72,10 @@ try {
     '  return req._user;');
   patch(path.join(src, 'server', 'routes.js'),
     "import fs from 'node:fs';",
-    "import { registerTelegramRoutes } from './telegram-auth.js';\nimport fs from 'node:fs';");
+    "import { streamR2 } from './r2-storage.js';\nimport { registerTelegramRoutes } from './telegram-auth.js';\nimport fs from 'node:fs';");
+  patch(path.join(src, 'server', 'routes.js'),
+    '    const file = path.join(DIRS.media, params.id, params.file);',
+    "    const file = path.join(DIRS.media, params.id, params.file);\n    if (!fs.existsSync(file) && await streamR2(req, res, params.id, params.file, cache)) return;");
   patch(path.join(src, 'server', 'routes.js'),
     'export function registerRoutes() {',
     'export function registerRoutes() {\n  registerTelegramRoutes();');
@@ -96,6 +109,36 @@ try {
   patch(path.join(src, 'public', 'js', 'app.js'),
     'function endSession() {',
     "function endSession() {\n  if (window.__dupnyMiniApp?.connected) { location.reload(); return; }");
+  patch(path.join(src, 'server', 'library.js'),
+    "import path from 'node:path';",
+    "import { removeR2Media } from './r2-storage.js';\nimport path from 'node:path';");
+  patch(path.join(src, 'server', 'library.js'),
+    '  await rmrf(mediaDir(id));',
+    '  await removeR2Media(id);\n  await rmrf(mediaDir(id));');
+
+  patch(path.join(src, 'server', 'queue.js'),
+    "import fs from 'node:fs';",
+    "import { archiveMediaOnce, migrateExistingMedia, verifyR2 } from './r2-storage.js';\nimport fs from 'node:fs';");
+  patch(path.join(src, 'server', 'queue.js'),
+    "      log(\`[\${id}] трек «\${getMedia(id)?.title}» готов\`);",
+    "      log(\`[\${id}] трек «\${getMedia(id)?.title}» готов\`);");
+  // Archive after ingestVideo/audio. Failures are logged without corrupting ready media.
+  patch(path.join(src, 'server', 'queue.js'),
+    '    }\n  } catch (e) {\n    if (!getMedia(id) || e.code === \'cancelled\') return;',
+    "    }\n    await archiveMediaOnce(id);\n  } catch (e) {\n    if (!getMedia(id) || e.code === 'cancelled') return;");
+  patch(path.join(src, 'server', 'queue.js'),
+    "    log(\`[\${m.id}] версия \${v.label} готова (\${origin === 'site' ? 'взята с сайта' : 'пересжата'})\`);",
+    "    await archiveMediaOnce(m.id);\n    log(\`[\${m.id}] версия \${v.label} готова (\${origin === 'site' ? 'взята с сайта' : 'пересжата'})\`);");
+  patch(path.join(src, 'server', 'queue.js'),
+    'export async function recover() {',
+    'export async function recover() {\n  await verifyR2();\n  migrateExistingMedia();');
+
+  patch(path.join(src, 'server', 'uploads.js'),
+    "import fs from 'node:fs';",
+    "import { r2Enabled } from './r2-storage.js';\nimport fs from 'node:fs';");
+  patch(path.join(src, 'server', 'uploads.js'),
+    'if (free < size * 2.1 + 200e6)',
+    'if (free < size * (r2Enabled ? 2.5 : 2.1) + (r2Enabled ? 60e6 : 200e6))');
   console.log('[Dupny] Installing application dependencies...');
   execFileSync('npm', ['install', '--omit=dev', '--prefix', src], { stdio: 'inherit', env: process.env });
   console.log('[Dupny] Build complete.');
