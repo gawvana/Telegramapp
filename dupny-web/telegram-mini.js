@@ -58,7 +58,7 @@ export async function bootTelegram() {
   const overlay = showGate('Открываем твой Telegram-профиль…');
   try {
     const params = new URLSearchParams(location.search);
-    const referral = params.get('ref') || tg.initDataUnsafe?.start_param || '';
+    const referral = tg.initDataUnsafe?.start_param || params.get('tgWebAppStartParam') || params.get('ref') || '';
     const response = await fetch('/api/telegram/auth', {
       method: 'POST', credentials: 'same-origin',
       headers: { 'content-type': 'application/json' },
