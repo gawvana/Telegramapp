@@ -199,6 +199,14 @@ try {
     execFileSync(process.execPath, ['--check', path.join(src, file)], { stdio: 'pipe' });
   }
   console.log('[Dupny] Syntax checks passed.');
+  // Test real route behavior with a separate SQLite database and a fake Telegram token.
+  fs.mkdirSync(path.join(src, 'tests'), { recursive: true });
+  fs.copyFileSync('test-telegram.mjs', path.join(src, 'tests', 'test-telegram.mjs'));
+  execFileSync(process.execPath, [
+    '--experimental-sqlite', '--disable-warning=ExperimentalWarning',
+    path.join(src, 'tests', 'test-telegram.mjs')
+  ], { stdio: 'inherit', timeout: 45000 });
+
   console.log('[Dupny] Build complete.');
 } finally {
   fs.rmSync(temp, { recursive: true, force: true });
