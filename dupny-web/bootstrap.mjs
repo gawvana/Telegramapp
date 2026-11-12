@@ -3,6 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { execFileSync } from 'node:child_process';
+import { applyPrivacyPatches } from './privacy-patch.mjs';
+import { applyPrivateRooms } from './private-rooms.mjs';
 const src = path.resolve('site');
 const commit = '6be4a3e21d4e64dd35dd5ac68f257d43e72be4d5';
 const url = 'https://codeload.github.com/jas2k/lozha/tar.gz/' + commit;
@@ -188,13 +190,21 @@ try {
   patch(path.join(src, 'server', 'uploads.js'),
     'if (free < size * 2.1 + 200e6)',
     'if (free < size * (r2Enabled ? 2.5 : 2.1) + (r2Enabled ? 60e6 : 200e6))');
+  // Telegram profiles own their data. Never create a legacy password owner.
+  patch(path.join(src, 'server', 'index.js'),
+    '  await ensureOwner();',
+    '  // First verified Telegram owner is created on first Mini App login.');
+  applyPrivacyPatches(src);
+  applyPrivateRooms(src);
+  console.log('[Dupny] Private libraries, media access and individual playback rooms installed.');
   console.log('[Dupny] Installing application dependencies...');
   execFileSync('npm', ['install', '--omit=dev', '--prefix', src], { stdio: 'inherit', env: process.env });
   // Fail the release before deployment if generated JavaScript is invalid.
   for (const file of [
     'server/index.js', 'server/http.js', 'server/auth.js', 'server/routes.js',
     'server/telegram-auth.js', 'server/r2-storage.js', 'server/queue.js',
-    'public/js/app.js', 'public/js/telegram-mini.js', 'public/js/pages/settings.js'
+    'public/js/app.js', 'public/js/telegram-mini.js', 'public/js/pages/settings.js',
+    'server/rooms.js', 'server/library.js', 'public/js/pages/library.js', 'public/js/pages/music.js'
   ]) {
     execFileSync(process.execPath, ['--check', path.join(src, file)], { stdio: 'pipe' });
   }
