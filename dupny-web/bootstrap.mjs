@@ -79,6 +79,16 @@ try {
   patch(path.join(src, 'server', 'routes.js'),
     'export function registerRoutes() {',
     'export function registerRoutes() {\n  registerTelegramRoutes();');
+  // Telegram Web's iframe must be allowed, while other origins remain blocked.
+  patch(path.join(src, 'server', 'http.js'),
+    "  res.setHeader('X-Frame-Options', 'DENY');",
+    '  // X-Frame-Options omitted: Telegram Web Mini App embeds this page.');
+  patch(path.join(src, 'server', 'http.js'),
+    `"frame-ancestors 'none'"`,
+    `"frame-ancestors https://web.telegram.org https://*.telegram.org https://t.me https://*.t.me"`);
+  patch(path.join(src, 'server', 'http.js'),
+    "  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');",
+    '  // COOP omitted to preserve Telegram Mini App parent messaging.');
   patch(path.join(src, 'server', 'http.js'),
     '"script-src \'self\'"',
     '"script-src \'self\' https://telegram.org"');
@@ -91,6 +101,10 @@ try {
   patch(path.join(src, 'public', 'js', 'app.js'),
     '(async function boot() {\n  try { await loadMe(); }',
     "(async function boot() {\n  if (!await bootTelegram()) { app.classList.remove('booting'); return; }\n  try { await loadMe(); }");
+  // Telegram account login does not use a user-entered password.
+  patch(path.join(src, 'public', 'js', 'app.js'),
+    "if (store.warnPass && route.nav && route.nav !== 'settings')",
+    "if (store.warnPass && !window.__dupnyMiniApp?.connected && route.nav && route.nav !== 'settings')");
   // No password, logout or profile-edit forms inside Telegram.
   patch(path.join(src, 'public', 'js', 'pages', 'settings.js'),
     '  return () => { for (const off of offs) off(); offs = []; };',
@@ -141,6 +155,15 @@ try {
     'if (free < size * (r2Enabled ? 2.5 : 2.1) + (r2Enabled ? 60e6 : 200e6))');
   console.log('[Dupny] Installing application dependencies...');
   execFileSync('npm', ['install', '--omit=dev', '--prefix', src], { stdio: 'inherit', env: process.env });
+  // Fail the release before deployment if generated JavaScript is invalid.
+  for (const file of [
+    'server/index.js', 'server/http.js', 'server/auth.js', 'server/routes.js',
+    'server/telegram-auth.js', 'server/r2-storage.js', 'server/queue.js',
+    'public/js/app.js', 'public/js/telegram-mini.js', 'public/js/pages/settings.js'
+  ]) {
+    execFileSync(process.execPath, ['--check', path.join(src, file)], { stdio: 'pipe' });
+  }
+  console.log('[Dupny] Syntax checks passed.');
   console.log('[Dupny] Build complete.');
 } finally {
   fs.rmSync(temp, { recursive: true, force: true });
