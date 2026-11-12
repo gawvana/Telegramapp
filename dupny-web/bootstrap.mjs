@@ -54,6 +54,12 @@ try {
     ].join('\n');
     fs.writeFileSync(file, before.replace(expr, replacement));
   }
+  // Reject old password sessions, even if a legacy cookie is still present.
+  patch(path.join(src, 'server', 'auth.js'),
+    '  req._user = userByToken(token);\\n  return req._user;',
+    '  req._user = userByToken(token);\\n' +
+    "  if (req._user && !sql('SELECT session_id FROM telegram_sessions WHERE session_id = ?').get(req._user.sid)) req._user = null;\\n" +
+    '  return req._user;');
   patch(path.join(src, 'server', 'routes.js'),
     "import fs from 'node:fs';",
     "import { registerTelegramRoutes } from './telegram-auth.js';\nimport fs from 'node:fs';");
