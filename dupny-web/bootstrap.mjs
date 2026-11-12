@@ -5,6 +5,7 @@ import os from 'node:os';
 import { execFileSync } from 'node:child_process';
 import { applyPrivacyPatches } from './privacy-patch.mjs';
 import { applyPrivateRooms } from './private-rooms.mjs';
+import { applyFriendAccess } from './friends-access.mjs';
 const src = path.resolve('site');
 const commit = '6be4a3e21d4e64dd35dd5ac68f257d43e72be4d5';
 const url = 'https://codeload.github.com/jas2k/lozha/tar.gz/' + commit;
@@ -196,6 +197,7 @@ try {
     '  // First verified Telegram owner is created on first Mini App login.');
   applyPrivacyPatches(src);
   applyPrivateRooms(src);
+  applyFriendAccess(src);
   console.log('[Dupny] Private libraries, media access and individual playback rooms installed.');
   console.log('[Dupny] Installing application dependencies...');
   execFileSync('npm', ['install', '--omit=dev', '--prefix', src], { stdio: 'inherit', env: process.env });
