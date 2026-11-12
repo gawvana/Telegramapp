@@ -53,6 +53,23 @@ try{
   const a=await account(8294117388);
   const b=await account(1234567890);
   assert.notEqual(a.uid,b.uid);
+  const invited=await account(1234567891);
+  const stranger=await account(1234567892);
+  sql('UPDATE telegram_accounts SET referred_by = ? WHERE user_id = ?').run('8294117388',b.uid);
+  sql('UPDATE telegram_accounts SET referred_by = ? WHERE user_id = ?').run('1234567890',invited.uid);
+  const friendsRes=await request(b,'/api/friends');
+  assert.equal(friendsRes.status,200,'regular user can open Friends');
+  const myFriends=(await friendsRes.json()).friends;
+  assert.deepEqual(new Set(myFriends.map(f=>f.id)),new Set([a.uid,invited.uid]),
+    'only inviter and invitees visible to regular user');
+  assert.ok(!myFriends.some(f=>f.id===stranger.uid),'unrelated accounts must remain hidden');
+  assert.deepEqual((await (await request(stranger,'/api/friends')).json()).friends,[],
+    'users without invitations have an empty friend list');
+  const navSource=fs.readFileSync(path.resolve('site/public/js/app.js'),'utf8');
+  assert.match(navSource,/\{ key: 'friends', href: '\/friends', icon: 'users', label: 'Друзья' \}/,
+    'Friends must appear in every navbar');
+  assert.match(navSource,/mount: friendsPage, nav: 'friends' \}/,
+    'Friends page must allow all signed-in users');
   const videoA=createMedia({kind:'video',title:'Private A',status:'ready',origin:'upload',addedBy:a.uid});
   const videoB=createMedia({kind:'video',title:'Private B',status:'ready',origin:'upload',addedBy:b.uid});
   const audioB=createMedia({kind:'audio',title:'Private audio B',status:'ready',origin:'upload',addedBy:b.uid});
@@ -91,7 +108,7 @@ try{
   const myRoomId=(await myRoom.json()).id;
   assert.equal(roomFor(videoB,b.uid),myRoomId);
   assert.equal((await (await request(a,'/api/rooms')).json()).list.length,0);
-  console.log('[Dupny privacy test] Two users: media isolation, direct stream, edits, delete, rooms: PASS');
+  console.log('[Dupny privacy test] Media, rooms, Friends visibility and referral privacy: PASS');
 }finally{
   await new Promise(resolve=>server.close(resolve));
   db.close();
