@@ -115,7 +115,7 @@ try {
     '"script-src \'self\' https://telegram.org"');
   patch(path.join(src, 'public', 'index.html'),
     '<script type="module" src="/js/app.js"></script>',
-    '<script src="https://telegram.org/js/telegram-web-app.js"></script>\n  <script type="module" src="/js/app.js"></script>');
+    '<script src="https://telegram.org/js/telegram-web-app.js"></script>\n  <script type="module" src="/js/app.js?v=dupny-friends-2"></script>');
   patch(path.join(src, 'public', 'js', 'app.js'),
     "import { loginPage, invitePage } from './pages/auth.js';",
     "import { loginPage, invitePage } from './pages/telegram-entry.js';");
