@@ -44,28 +44,6 @@ function showGate(text, showRetry = false) {
   }
   return overlay;
 }
-function inviteButton(tg) {
-  if (document.getElementById('dupny-invite')) return;
-  const button = document.createElement('button');
-  button.id = 'dupny-invite';
-  button.type = 'button';
-  button.textContent = '✉ Пригласить';
-  Object.assign(button.style, {
-    position: 'fixed', top: 'calc(env(safe-area-inset-top, 0px) + 14px)',
-    right: '14px', zIndex: '9000', borderRadius: '18px',
-    background: '#fff', color: '#111', border: '1px solid #bbb',
-    padding: '8px 13px', fontWeight: '700', fontSize: '13px',
-    boxShadow: '0 3px 15px #0005', cursor: 'pointer'
-  });
-  button.onclick = () => {
-    if (!inviteUrl) return;
-    const share = 'https://t.me/share/url?url=' + encodeURIComponent(inviteUrl)
-      + '&text=' + encodeURIComponent('Заходи в Dupny! Будем смотреть вместе 🎬');
-    if (typeof tg.openTelegramLink === 'function') tg.openTelegramLink(share);
-    else window.open(share, '_blank', 'noopener,noreferrer');
-  };
-  document.body.appendChild(button);
-}
 // Used when an embedded browser blocks cookies or Telegram auth has expired.
 window.__dupnyShowLoginProblem = () => {
   showGate('Не получилось восстановить Telegram-сеанс. Закрой Mini App и открой его снова из @DupnyApp.', true);
@@ -99,7 +77,6 @@ export async function bootTelegram() {
     }
     inviteUrl = data.inviteUrl;
     window.__dupnyMiniApp = { connected: true, inviteUrl, telegram: data.user.telegram };
-    inviteButton(tg);
     overlay.remove();
     return true;
   } catch (err) {
