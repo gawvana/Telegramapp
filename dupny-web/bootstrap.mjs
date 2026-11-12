@@ -51,7 +51,7 @@ try {
       '  return { id: u.id, login: displayLogin, name: u.name, role: u.role, avatar: displayAvatar,',
       '    telegram: t ? { id: t.telegram_id, username: t.username || null } : null };',
       '}',
-    ].join('\\n');
+    ].join('\n');
     fs.writeFileSync(file, before.replace(expr, replacement));
   }
   patch(path.join(src, 'server', 'routes.js'),
@@ -86,10 +86,10 @@ try {
       "    }",
       "  }",
       '  return () => { for (const off of offs) off(); offs = []; };',
-    ].join('\\n'));
+    ].join('\n'));
   patch(path.join(src, 'public', 'js', 'app.js'),
     'function endSession() {',
-    "function endSession() {\\n  if (window.__dupnyMiniApp?.connected) { location.reload(); return; }");
+    "function endSession() {\n  if (window.__dupnyMiniApp?.connected) { location.reload(); return; }");
   console.log('[Dupny] Installing application dependencies...');
   execFileSync('npm', ['install', '--omit=dev', '--prefix', src], { stdio: 'inherit', env: process.env });
   console.log('[Dupny] Build complete.');
