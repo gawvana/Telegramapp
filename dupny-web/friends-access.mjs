@@ -61,5 +61,5 @@ export function applyFriendAccess(root) {
     '  .tabbar > a { flex: 1 1 0; min-width: 0; padding-inline: 2px; }',
     '}',
     ''
-  ].join('\\n'));
+  ].join('\n'));
 }
