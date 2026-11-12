@@ -52,4 +52,14 @@ export function applyFriendAccess(root) {
     ].join('\n');
     return c.replace(old, fresh);
   });
+
+  modify('public/css/app.css', css => css + [
+    '',
+    '/* Keep all four tabs visible on narrow Telegram screens. */',
+    '@media (max-width: 460px) {',
+    '  .tabbar { width: calc(100vw - 20px); justify-content: space-around; }',
+    '  .tabbar > a { flex: 1 1 0; min-width: 0; padding-inline: 2px; }',
+    '}',
+    ''
+  ].join('\\n'));
 }
