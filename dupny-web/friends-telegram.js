@@ -60,23 +60,33 @@ export function friendsPage(root) {
       h('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap', margin: '12px 0' } }, share, copy),
       address
     ),
-    h('div.group', h('div.eyebrow', 'Мои друзья'), list)
+    h('div.group',
+      h('div.eyebrow', 'Мои друзья'),
+      h('button.btn.btn-s', { type: 'button', onclick: refreshFriends }, 'Обновить список'),
+      list)
   );
-  get('/api/friends').then(({ friends }) => {
-    if (!friends.length) {
-      list.replaceChildren(h('p', 'Пока никого нет. Отправь приглашение и попроси друга открыть Mini App.'));
-      return;
+  async function refreshFriends() {
+    list.replaceChildren(h('p', 'Обновляем список друзей…'));
+    try {
+      const { friends = [] } = await get('/api/friends');
+      if (!friends.length) {
+        list.replaceChildren(h('p', 'Пока никого нет. Отправь приглашение и попроси друга открыть Mini App.'));
+        return;
+      }
+      list.replaceChildren(...friends.map((f, i) =>
+        h('div.item', { style: { '--i': i } },
+          avatar(f),
+          h('div.grow',
+            h('b.clip', f.name),
+            h('span', (f.login?.startsWith('@') ? f.login + ' · ' : '') +
+              (f.role === 'owner' ? 'владелец' : 'участник') +
+              (f.online ? ' · в сети' : ''))
+          ),
+          f.role === 'owner' ? h('span.chip', icon('crown', 'ic-s'), 'владелец') : null
+        )));
+    } catch (error) {
+      list.replaceChildren(h('p', error.message || 'Не удалось загрузить друзей'));
     }
-    list.replaceChildren(...friends.map((f, i) =>
-      h('div.item', { style: { '--i': i } },
-        avatar(f),
-        h('div.grow',
-          h('b.clip', f.name),
-          h('span', (f.login?.startsWith('@') ? f.login + ' · ' : '') +
-            (f.role === 'owner' ? 'владелец' : 'участник') +
-            (f.online ? ' · в сети' : ''))
-        ),
-        f.role === 'owner' ? h('span.chip', icon('crown', 'ic-s'), 'владелец') : null
-      )));
-  }).catch(error => list.replaceChildren(h('p', error.message || 'Не удалось загрузить друзей')));
+  }
+  refreshFriends();
 }
