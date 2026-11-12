@@ -68,7 +68,7 @@ async function sendInvite(chatId, telegramId) {
     '&text=' + encodeURIComponent('Заходи в Dupny! Будем смотреть фильмы и слушать музыку вместе 🎬');
   return api('sendMessage', {
     chat_id: chatId,
-    text: '👥 <b>Пригласи друзей в Dupny</b>\n\nОтправь ссылку другу. Когда он откроет Mini App, его аккаунт зарегистрируется через Telegram.\n\n' + url,
+    text: '👥 <b>Пригласи друзей в Dupny</b>\n\nОтправь ссылку другу. Когда он откроет Mini App, сразу увидит свой Telegram-профиль. Никаких анкет и паролей.\n\n' + url,
     parse_mode: 'HTML',
     reply_markup: { inline_keyboard: [
       [{ text: '📨 Поделиться приглашением', url: share }],
@@ -97,7 +97,7 @@ async function handleMessage(message) {
     return send(chatId, h, p);
   }
   if (cmd === '/about') {
-    const h = emoji(EMOJI.bot, '🤖') + ' <b>Dupny (Дупни)</b>\n\nTelegram Mini App для совместного просмотра фильмов и музыки. Регистрация через Telegram.';
+    const h = emoji(EMOJI.bot, '🤖') + ' <b>Dupny (Дупни)</b>\n\nTelegram Mini App для совместного просмотра фильмов и музыки. Вход без анкет и паролей.';
     const p = '🤖 Dupny (Дупни)\n\nTelegram Mini App для совместного просмотра фильмов и музыки. Регистрация через Telegram.';
     return send(chatId, h, p);
   }
