@@ -57,6 +57,21 @@ try{
   await account(1234567890,'ref_8294117388');
   const invited=await account(1234567891,'ref_1234567890');
   const stranger=await account(1234567892);
+  const timestamp=Math.floor(Date.now()/1000);
+  const inviteeId='1234567893';
+  const inviterId='1234567890';
+  const signature=crypto.createHmac('sha256',process.env.TELEGRAM_BOT_TOKEN)
+    .update(inviteeId+':'+inviterId+':'+timestamp).digest('hex');
+  const botResponse=await fetch(base+'/api/telegram/referral',{
+    method:'POST',
+    headers:{'content-type':'application/json','x-forwarded-proto':'https'},
+    body:JSON.stringify({inviteeId,inviterId,timestamp,signature})
+  });
+  assert.equal(botResponse.status,200,'bot must save /start invitation');
+  const fromMenu=await account(1234567893);
+  assert.equal(sql('SELECT referred_by FROM telegram_accounts WHERE user_id = ?')
+    .get(fromMenu.uid).referred_by,inviterId,
+    'invitation must survive opening the Mini App through the normal menu');
   assert.equal(sql('SELECT referred_by FROM telegram_accounts WHERE user_id = ?').get(b.uid).referred_by,
     '8294117388', 'existing accounts must accept a referral link');
   assert.equal(sql('SELECT referred_by FROM telegram_accounts WHERE user_id = ?').get(invited.uid).referred_by,
@@ -71,7 +86,7 @@ try{
   const friendsRes=await request(b,'/api/friends');
   assert.equal(friendsRes.status,200,'regular user can open Friends');
   const myFriends=(await friendsRes.json()).friends;
-  assert.deepEqual(new Set(myFriends.map(f=>f.id)),new Set([a.uid,invited.uid]),
+  assert.deepEqual(new Set(myFriends.map(f=>f.id)),new Set([a.uid,invited.uid,fromMenu.uid]),
     'only inviter and invitees visible to regular user');
   assert.ok(!myFriends.some(f=>f.id===stranger.uid),'unrelated accounts must remain hidden');
   assert.deepEqual((await (await request(stranger,'/api/friends')).json()).friends,[],
