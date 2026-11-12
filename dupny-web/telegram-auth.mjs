@@ -97,7 +97,14 @@ export function registerTelegramRoutes() {
     if (!/^\d+$/.test(ownerId || '')) throw new HttpError(503, 'Владелец Mini App не настроен');
     const isOwner = id === ownerId;
     const mapping = sql('SELECT user_id FROM telegram_accounts WHERE telegram_id = ?').get(id);
+    const referrer = invitedBy(startParam || body.referral, id);
     let uid = mapping?.user_id;
+    // Existing users can accept a friend invitation exactly once.
+    // Never replace a previously established inviter.
+    if (uid && referrer) {
+      sql('UPDATE telegram_accounts SET referred_by = ? ' +
+        'WHERE telegram_id = ? AND referred_by IS NULL').run(referrer, id);
+    }
     if (!uid && isOwner) {
       // Reuse an unmapped legacy owner to retain their media and settings.
       const legacy = sql('SELECT u.id FROM users u LEFT JOIN telegram_accounts t ON t.user_id = u.id ' +
@@ -108,7 +115,7 @@ export function registerTelegramRoutes() {
           .run(id, uid, usernameOf(tg), photoOf(tg), Date.now());
       }
     }
-    if (!uid) uid = await createTelegramIdentity(tg, isOwner, invitedBy(startParam || body.referral, id));
+    if (!uid) uid = await createTelegramIdentity(tg, isOwner, referrer);
     const current = sql('SELECT * FROM users WHERE id = ?').get(uid);
     if (!current) throw new HttpError(401, 'Аккаунт не найден');
     // The verified Telegram ID, never cookies or client JSON, decides ownership.
