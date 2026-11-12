@@ -4,8 +4,13 @@ import { icon } from '../icons.js';
 import { get } from '../api.js';
 import { toast, avatar } from '../ui.js';
 
-const referralLink = () => window.__dupnyMiniApp?.inviteUrl || '';
 const validReferral = url => /^https:\/\/t\.me\/DupnyApp\?start=ref_\d{4,18}$/.test(url);
+const referralLink = () => {
+  const saved = window.__dupnyMiniApp?.inviteUrl || '';
+  if (validReferral(saved)) return saved;
+  const id = String(window.__dupnyMiniApp?.telegram?.id || '');
+  return /^\d{4,18}$/.test(id) ? 'https://t.me/DupnyApp?start=ref_' + id : '';
+};
 
 async function copyInvite() {
   const url = referralLink();
