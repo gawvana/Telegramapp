@@ -66,6 +66,10 @@ function inviteButton(tg) {
   };
   document.body.appendChild(button);
 }
+// Used when an embedded browser blocks cookies or Telegram auth has expired.
+window.__dupnyShowLoginProblem = () => {
+  showGate('Не получилось восстановить Telegram-сеанс. Закрой Mini App и открой его снова из @DupnyApp.', true);
+};
 export async function bootTelegram() {
   const tg = window.Telegram?.WebApp;
   if (!tg?.initData) {
@@ -85,6 +89,14 @@ export async function bootTelegram() {
     const data = await response.json().catch(() => ({}));
     if (!response.ok || !data.ok) throw new Error(data.error || 'Не удалось проверить Telegram');
     if (!data.user || !data.user.telegram) throw new Error('Сервер не распознал Telegram-профиль');
+    // Telegram Web embeds Mini Apps as a cross-site iframe.
+    // Verify the partitioned cookie actually survives the following request.
+    const verify = await fetch('/api/me', { credentials: 'include', cache: 'no-store' });
+    const session = await verify.json().catch(() => ({}));
+    if (!verify.ok || !session.user ||
+        String(session.user.telegram?.id) !== String(data.user.telegram.id)) {
+      throw new Error('Telegram-сеанс не сохранился. Закрой Mini App и открой заново.');
+    }
     inviteUrl = data.inviteUrl;
     window.__dupnyMiniApp = { connected: true, inviteUrl, telegram: data.user.telegram };
     inviteButton(tg);
