@@ -137,7 +137,7 @@ async function handleCallback(query) {
 // Profile setup without repeating edits that cause Telegram flood limits.
 async function syncProfile() {
   const changes = [
-    ['getChatMenuButton', 'setChatMenuButton', 'menu_button', {
+    ['getChatMenuButton', 'setChatMenuButton', null, {
       type: 'web_app', text: 'Открыть Dupny', web_app: { url: SITE }
     }],
     ['getMyName', 'setMyName', 'name', 'Dupny | Дупни'],
