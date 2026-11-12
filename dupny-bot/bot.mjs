@@ -102,8 +102,8 @@ const HELP_PLAIN = '❓ Команды Dupny\n\n/start — главная\n/invi
 async function sendInvite(chatId, tgId) {
   const link = inviteLink(tgId);
   const html = ico('share') + ' <b>Пригласи друзей в Dupny</b>\n\n'
-    + ico('film') + ' Друг откроет Mini App со своим Telegram-профилем. '
-    + 'Без логинов, анкет и паролей.\n\n' + link;
+    + ico('film') + ' Отправь ссылку другу. Друг нажимает «Запустить» у бота, '
+    + 'затем «Открыть Mini App». Вход через Telegram, без пароля.\n\n' + link;
   const plain = '⬆️ Пригласи друзей в Dupny\n\n'
     + 'Друг откроет Mini App со своим Telegram-профилем.\n\n' + link;
   return send(chatId, html, plain, premium => inviteKeyboard(premium, link));
@@ -113,6 +113,22 @@ async function handleMessage(msg) {
   const words = msg.text.trim().split(/\s+/);
   const command = words[0].toLowerCase().split('@')[0];
   const referral = /^ref_\d{4,18}$/.test(words[1] || '') ? words[1] : '';
+  if (command === '/start' && referral) {
+    // Telegram users may open the Mini App from the persistent chat menu
+    // instead of the referral-specific inline button. Preserve it in both.
+    try {
+      await api('setChatMenuButton', {
+        chat_id: msg.chat.id,
+        menu_button: {
+          type: 'web_app',
+          text: 'Открыть Dupny',
+          web_app: { url: SITE + '?ref=' + encodeURIComponent(referral) }
+        }
+      });
+    } catch (error) {
+      console.warn('Cannot set referral menu button:', error.message);
+    }
+  }
   if (command === '/invite') return sendInvite(msg.chat.id, msg.from.id);
   if (command === '/help') return send(msg.chat.id, HELP_HTML, HELP_PLAIN);
   if (command === '/settings') return send(msg.chat.id,
