@@ -37,6 +37,7 @@ try {
   fs.copyFileSync('r2-storage.mjs', path.join(src, 'server', 'r2-storage.js'));
   fs.copyFileSync('telegram-mini.js', path.join(src, 'public', 'js', 'telegram-mini.js'));
   fs.copyFileSync('friends-telegram.js', path.join(src, 'public', 'js', 'pages', 'friends.js'));
+  fs.copyFileSync('telegram-entry.js', path.join(src, 'public', 'js', 'pages', 'telegram-entry.js'));
   // R2 uses official S3-compatible AWS SDK packages only on the server.
   {
     const packageFile = path.join(src, 'package.json');
@@ -70,6 +71,23 @@ try {
     '  req._user = userByToken(token);\n' +
     "  if (req._user && !sql('SELECT session_id FROM telegram_sessions WHERE session_id = ?').get(req._user.sid)) req._user = null;\n" +
     '  return req._user;');
+  // HTTPS Mini Apps are embedded by Telegram Web on another site.
+  // The old SameSite=Lax cookie was never sent inside that iframe.
+  patch(path.join(src, 'server', 'auth.js'),
+    [
+      "export function sessionCookie(req, token) {",
+      "  const secure = isSecure(req) ? '; Secure' : '';",
+      "  if (!token) return \`${cookieName(req)}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure}\`;",
+      "  return \`${cookieName(req)}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${Math.floor(SESSION_TTL / 1000)}${secure}\`;",
+      "}",
+    ].join('\\n'),
+    [
+      "export function sessionCookie(req, token) {",
+      "  const attrs = isSecure(req) ? '; Secure; SameSite=None; Partitioned' : '; SameSite=Lax';",
+      "  if (!token) return \`${cookieName(req)}=; Path=/; HttpOnly${attrs}; Max-Age=0\`;",
+      "  return \`${cookieName(req)}=${token}; Path=/; HttpOnly${attrs}; Max-Age=${Math.floor(SESSION_TTL / 1000)}\`;",
+      "}",
+    ].join('\\n'));
   patch(path.join(src, 'server', 'routes.js'),
     "import fs from 'node:fs';",
     "import { streamR2 } from './r2-storage.js';\nimport { registerTelegramRoutes } from './telegram-auth.js';\nimport fs from 'node:fs';");
@@ -96,11 +114,28 @@ try {
     '<script type="module" src="/js/app.js"></script>',
     '<script src="https://telegram.org/js/telegram-web-app.js"></script>\n  <script type="module" src="/js/app.js"></script>');
   patch(path.join(src, 'public', 'js', 'app.js'),
+    "import { loginPage, invitePage } from './pages/auth.js';",
+    "import { loginPage, invitePage } from './pages/telegram-entry.js';");
+  patch(path.join(src, 'public', 'js', 'app.js'),
     "import { h, $, sleep, reduced } from './util.js';",
     "import { bootTelegram } from './telegram-mini.js';\nimport { h, $, sleep, reduced } from './util.js';");
   patch(path.join(src, 'public', 'js', 'app.js'),
     '(async function boot() {\n  try { await loadMe(); }',
     "(async function boot() {\n  if (!await bootTelegram()) { app.classList.remove('booting'); return; }\n  try { await loadMe(); }");
+  // If a cookie is unavailable, never show the legacy login page.
+  patch(path.join(src, 'public', 'js', 'app.js'),
+    "  if (!store.me && !route.pub) {",
+    "  if (window.Telegram?.WebApp && !store.me) {\\n" +
+    "    window.__dupnyShowLoginProblem?.();\\n" +
+    "    return;\\n" +
+    "  }\\n" +
+    "  if (!store.me && !route.pub) {");
+  // Also block the fallback redirect when the user is already inside Telegram.
+  patch(path.join(src, 'public', 'js', 'app.js'),
+    "  if (store.me) await startSession();\\n  app.classList.remove('booting');",
+    "  if (store.me) await startSession();\\n" +
+    "  else if (window.Telegram?.WebApp) { window.__dupnyShowLoginProblem?.(); return; }\\n" +
+    "  app.classList.remove('booting');");
   // Telegram account login does not use a user-entered password.
   patch(path.join(src, 'public', 'js', 'app.js'),
     "if (store.warnPass && route.nav && route.nav !== 'settings')",
