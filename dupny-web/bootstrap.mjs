@@ -217,6 +217,13 @@ try {
     path.join(src, 'tests', 'test-telegram.mjs')
   ], { stdio: 'inherit', timeout: 45000 });
 
+  // Privacy regression tests: two accounts cannot read or change each other's files.
+  fs.copyFileSync('test-privacy.mjs', path.join(src, 'tests', 'test-privacy.mjs'));
+  execFileSync(process.execPath, [
+    '--experimental-sqlite', '--disable-warning=ExperimentalWarning',
+    path.join(src, 'tests', 'test-privacy.mjs')
+  ], { stdio: 'inherit', timeout: 45000 });
+
   console.log('[Dupny] Build complete.');
 } finally {
   fs.rmSync(temp, { recursive: true, force: true });
