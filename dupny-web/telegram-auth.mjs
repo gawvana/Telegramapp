@@ -10,6 +10,9 @@ db.exec('CREATE TABLE IF NOT EXISTS telegram_accounts (' +
   'REFERENCES users(id) ON DELETE CASCADE, referred_by TEXT, created_at INTEGER NOT NULL)');
 db.exec('CREATE TABLE IF NOT EXISTS telegram_sessions (' +
   'session_id TEXT PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE)');
+// Referrals received from the bot are saved before the invitee opens a Mini App.
+db.exec('CREATE TABLE IF NOT EXISTS pending_telegram_referrals (' +
+  'invitee_id TEXT PRIMARY KEY, inviter_id TEXT NOT NULL, expires_at INTEGER NOT NULL)');
 const columns = new Set(db.prepare('PRAGMA table_info(telegram_accounts)').all().map(c => c.name));
 if (!columns.has('username')) db.exec('ALTER TABLE telegram_accounts ADD COLUMN username TEXT');
 if (!columns.has('photo_url')) db.exec('ALTER TABLE telegram_accounts ADD COLUMN photo_url TEXT');
@@ -85,6 +88,36 @@ async function createTelegramIdentity(tg, isOwner, referrer) {
   });
 }
 export function registerTelegramRoutes() {
+  // Trust bot-originated /start payloads, not arbitrary client supplied Telegram IDs.
+  route('POST', '/api/telegram/referral', async ({ req, res }) => {
+    const body = await readJson(req, 2000);
+    const invitee = String(body.inviteeId || '');
+    const inviter = String(body.inviterId || '');
+    const timestamp = Number(body.timestamp);
+    const signature = String(body.signature || '');
+    const token = process.env.TELEGRAM_BOT_TOKEN;
+    if (!token) throw new HttpError(503, 'Telegram bot is not configured');
+    if (!/^\d{4,18}$/.test(invitee) || !/^\d{4,18}$/.test(inviter) ||
+        inviter === invitee || !Number.isSafeInteger(timestamp) ||
+        Math.abs(Date.now() / 1000 - timestamp) > 300 ||
+        !/^[a-f0-9]{64}$/i.test(signature)) {
+      throw new HttpError(403, 'Invalid referral');
+    }
+    const expected = crypto.createHmac('sha256', token)
+      .update(invitee + ':' + inviter + ':' + timestamp).digest();
+    if (!crypto.timingSafeEqual(expected, Buffer.from(signature, 'hex'))) {
+      throw new HttpError(403, 'Invalid referral signature');
+    }
+    const existing = sql('SELECT referred_by FROM telegram_accounts WHERE telegram_id = ?').get(invitee);
+    // Never let a fresh link overwrite an established friendship.
+    if (!existing?.referred_by) {
+      sql('INSERT INTO pending_telegram_referrals (invitee_id, inviter_id, expires_at) ' +
+        'VALUES (?, ?, ?) ON CONFLICT(invitee_id) DO UPDATE SET ' +
+        'inviter_id = excluded.inviter_id, expires_at = excluded.expires_at')
+        .run(invitee, inviter, Date.now() + 7 * 86400000);
+    }
+    sendJson(res, 200, { ok: true });
+  }, { auth: false });
   // Disable legacy login and password-based invitation registration. Telegram is the only entry point.
   for (const url of ['/api/login', '/api/register']) {
     route('POST', url, () => { throw new HttpError(403, 'Открой Dupny через Telegram'); }, { auth: false });
@@ -97,7 +130,12 @@ export function registerTelegramRoutes() {
     if (!/^\d+$/.test(ownerId || '')) throw new HttpError(503, 'Владелец Mini App не настроен');
     const isOwner = id === ownerId;
     const mapping = sql('SELECT user_id FROM telegram_accounts WHERE telegram_id = ?').get(id);
-    const referrer = invitedBy(body.referral || startParam, id);
+    // Signed Mini App start_param wins; bot /start is a fallback when users launch
+    // the Mini App from its normal menu rather than the referral-specific button.
+    const pending = sql('SELECT inviter_id FROM pending_telegram_referrals ' +
+      'WHERE invitee_id = ? AND expires_at > ?').get(id, Date.now());
+    const referrer = invitedBy(startParam, id) ||
+      invitedBy(body.referral, id) || invitedBy(pending?.inviter_id ? 'ref_' + pending.inviter_id : '', id);
     let uid = mapping?.user_id;
     // Existing users can accept a friend invitation exactly once.
     // Never replace a previously established inviter.
@@ -116,6 +154,7 @@ export function registerTelegramRoutes() {
       }
     }
     if (!uid) uid = await createTelegramIdentity(tg, isOwner, referrer);
+    if (referrer) sql('DELETE FROM pending_telegram_referrals WHERE invitee_id = ?').run(id);
     const current = sql('SELECT * FROM users WHERE id = ?').get(uid);
     if (!current) throw new HttpError(401, 'Аккаунт не найден');
     // The verified Telegram ID, never cookies or client JSON, decides ownership.
