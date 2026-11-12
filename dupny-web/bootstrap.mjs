@@ -206,7 +206,8 @@ try {
     'server/index.js', 'server/http.js', 'server/auth.js', 'server/routes.js',
     'server/telegram-auth.js', 'server/r2-storage.js', 'server/queue.js',
     'public/js/app.js', 'public/js/telegram-mini.js', 'public/js/pages/settings.js',
-    'server/rooms.js', 'server/library.js', 'public/js/pages/library.js', 'public/js/pages/music.js'
+    'server/rooms.js', 'server/library.js', 'public/js/pages/library.js', 'public/js/pages/music.js',
+    'public/js/pages/friends.js'
   ]) {
     execFileSync(process.execPath, ['--check', path.join(src, file)], { stdio: 'pipe' });
   }
